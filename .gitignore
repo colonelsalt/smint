@@ -1,0 +1,9 @@
+.vscode
+**/out
+**/out.asm
+*.exe
+*.ilk
+*.obj
+src/*.pdb
+build
+*.10x
