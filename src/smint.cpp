@@ -6,7 +6,6 @@
 #include "stb_image.h"
 
 
-
 int main(int ArgC, char** ArgV)
 {
 	if (ArgC != 3)
@@ -18,26 +17,44 @@ int main(int ArgC, char** ArgV)
 	char* TilesetFileName = ArgV[1];
 	char* MapFileName = ArgV[2];
 
-	s32 TilesetWidth, TilesetHeight, TilesetNumComponents;
-	u8* ImageData = stbi_load(TilesetFileName, &TilesetWidth, &TilesetHeight, &TilesetNumComponents, 4);
+	s32 ImageWidth, ImageHeight, ImageNumComponents;
+	u8* ImageData = stbi_load(TilesetFileName, &ImageWidth, &ImageHeight, &ImageNumComponents, 4);
 	if (!ImageData)
 	{
 		const char* FailReason = stbi_failure_reason();
 		fprintf(stderr, "ERROR: Failed to load image file %s: %s\n", TilesetFileName, FailReason);
 		return 1;
 	}
+	Assert((ImageWidth * ImageHeight) % sizeof(pixel) == 0);
+	Assert((ImageWidth % 8 == 0) && (ImageHeight % 8 == 0));
 
-	Assert((TilesetWidth * TilesetHeight) % sizeof(pixel) == 0);
 	pixel* Pixels = (pixel*)ImageData;
 
-	printf("First pixel is R=%u, G=%u, B=%u\n", Pixels[0].R, Pixels[0].G, Pixels[0].B);
-	printf("Second pixel is R=%u, G=%u, B=%u\n", Pixels[1].R, Pixels[1].G, Pixels[1].B);
+	image OriginalImage = {};
+	OriginalImage.TileWidth = (u32)ImageWidth / 8;
+	OriginalImage.TileHeight = (u32)ImageHeight / 8;
+	OriginalImage.Tiles = (tile*)malloc(sizeof(tile) * OriginalImage.TileWidth * OriginalImage.TileHeight);
 
-	pixel* Pixel11 = Pixels + TilesetWidth + 1;
-	printf("Pixel[1][1] is R=%u, G=%u, B=%u\n", Pixel11->R, Pixel11->G, Pixel11->B);
+	// Copy pixels into tiles
+	for (u32 TileY = 0; TileY < OriginalImage.TileHeight; TileY++)
+	{
+		for (u32 TileX = 0; TileX < OriginalImage.TileWidth; TileX++)
+		{
+			tile* Tile = TileAt(&OriginalImage, TileX, TileY);
+			for (u32 PixelY = 0; PixelY < 8; PixelY++)
+			{
+				for (u32 PixelX = 0; PixelX < 8; PixelX++)
+				{
+					u32 PixelIndex = TileY * OriginalImage.TileWidth * 8 + PixelY * 8 * OriginalImage.TileWidth + TileX * 8 + PixelX;
+					
+					pixel* PixelToRead = Pixels + PixelIndex;
+					pixel* PixelToWrite = PixelAt(Tile, PixelX, PixelY);
 
-	pixel* LastPixel = Pixels + TilesetHeight * TilesetWidth - 1;
-	printf("Last pixel is R=%u, G=%u, B=%u\n", LastPixel->R, LastPixel->G, LastPixel->B);
+					*PixelToWrite = *PixelToRead;
+				}
+			}
+		}
+	}
 
 	stbi_image_free(ImageData);
 }
