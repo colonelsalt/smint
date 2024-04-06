@@ -27,14 +27,66 @@ b32 AreTilesEqualNoFlip(tile* A, tile* B)
 	return true;
 }
 
-b32 AreTilesEqual(tile* A, tile* B)
+b32 AreTilesEqual(unique_tile* UniqueTile, tile* TileToCheck)
 {
-	return AreTilesEqualNoFlip(A, B);
+	for (u32 VariantIndex = TileTransform_Unchanged; VariantIndex < TileTransform_Count; VariantIndex++)
+	{
+		tile* UniqueVariant = UniqueTile->Variants + VariantIndex;
+		if (AreTilesEqualNoFlip(UniqueVariant, TileToCheck))
+		{
+			TileToCheck->EquivalentUniqueTile = UniqueTile;
+			TileToCheck->EqualAfterTransform = (tile_transform_type)VariantIndex;
+			return true;
+		}
+	}
+
+	return false;
 }
 
-void GenerateTileVariants(tile* Tile, tile_variant* OutVariant)
+void CopyTransformedTile(tile* SourceTile, tile* OutTransformedTile, tile_transform_type Transform)
 {
+	for (u32 Y = 0; Y < 8; Y++)
+	{
+		for (u32 X = 0; X < 8; X++)
+		{
+			pixel* PixelToWrite = PixelAt(OutTransformedTile, X, Y);
 
+			pixel* PixelToRead;
+			switch (Transform)
+			{
+				case TileTransform_HFlip:
+				{
+					PixelToRead = PixelAt(SourceTile, 8 - X - 1, Y);
+				} break;
+				case TileTransform_VFlip:
+				{
+					PixelToRead = PixelAt(SourceTile, X, 8 - Y - 1);
+				} break;
+				case TileTransform_DiagonalFlip:
+				{
+					PixelToRead = PixelAt(SourceTile, 8 - X - 1, 8 - Y - 1);
+				} break;
+				default:
+				{
+					PixelToRead = PixelAt(SourceTile, X, Y);
+				} break;
+			}
+
+			*PixelToWrite = *PixelToRead;
+		}
+	}
+}
+
+void GenerateTileVariants(tile* Tile, unique_tile* OutUniqueTile)
+{	
+	for (u32 Transform = TileTransform_Unchanged; Transform < TileTransform_Count; Transform++)
+	{
+		tile* DestTile = OutUniqueTile->Variants + Transform;
+		DestTile->EquivalentUniqueTile = nullptr;
+		DestTile->EqualAfterTransform = TileTransform_Unchanged;
+
+		CopyTransformedTile(Tile, DestTile, (tile_transform_type)Transform);
+	}
 }
 
 int main(int ArgC, char** ArgV)
@@ -77,6 +129,8 @@ int main(int ArgC, char** ArgV)
 		for (u32 TileX = 0; TileX < OriginalImage.TileWidth; TileX++)
 		{
 			tile* Tile = TileAt(&OriginalImage, TileX, TileY);
+			Tile->EquivalentUniqueTile = nullptr;
+			Tile->EqualAfterTransform = TileTransform_Unchanged;
 			for (u32 PixelY = 0; PixelY < 8; PixelY++)
 			{
 				for (u32 PixelX = 0; PixelX < 8; PixelX++)
@@ -93,8 +147,7 @@ int main(int ArgC, char** ArgV)
 	}
 
 	u32 NumUniqueTiles = 0;
-	tile** MinimisedTiles = (tile**)malloc(sizeof(tile*) * OriginalImage.TileWidth * OriginalImage.TileHeight);
-	tile_variant* MinTileVariants = (tile_variant*)malloc(sizeof(tile_variant) * OriginalImage.TileWidth * OriginalImage.TileHeight);
+	unique_tile* MinimisedTiles = (unique_tile*)malloc(sizeof(unique_tile) * OriginalImage.TileWidth * OriginalImage.TileHeight);
 
 	for (u32 TileY = 0; TileY < OriginalImage.TileHeight; TileY++)
 	{
@@ -105,8 +158,8 @@ int main(int ArgC, char** ArgV)
 			b32 IsTileUnique = true;
 			for (u32 UniqueTileIndex = 0; UniqueTileIndex < NumUniqueTiles; UniqueTileIndex++)
 			{
-				tile* UnqiueTile = MinimisedTiles[UniqueTileIndex];
-				if (AreTilesEqual(Tile, UnqiueTile))
+				unique_tile* UnqiueTile = MinimisedTiles + UniqueTileIndex;
+				if (AreTilesEqual(UnqiueTile, Tile))
 				{
 					IsTileUnique = false;
 					break;
@@ -114,8 +167,7 @@ int main(int ArgC, char** ArgV)
 			}
 			if (IsTileUnique)
 			{
-				MinimisedTiles[NumUniqueTiles] = Tile;
-				GenerateTileVariants(Tile, MinTileVariants + NumUniqueTiles);
+				GenerateTileVariants(Tile, MinimisedTiles + NumUniqueTiles);
 				NumUniqueTiles++;
 			}
 		}
@@ -142,7 +194,7 @@ int main(int ArgC, char** ArgV)
 		for (u32 TileX = 0; TileX < OutputTileWidth; TileX++)
 		{
 			u32 TileIndex = TileY * OutputTileWidth + TileX;
-			tile* SourceTile = MinimisedTiles[TileIndex];
+			tile* SourceTile = MinimisedTiles[TileIndex].Variants + TileTransform_Unchanged;
 
 			for (u32 PixelY = 0; PixelY < 8; PixelY++)
 			{

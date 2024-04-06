@@ -29,18 +29,20 @@ struct bitmap_image
 
 enum tile_transform_type : u32
 {
-	Transform_Unchanged,
-	Transform_HFlip,
-	Transform_VFlip,
-	Transform_DiagonalFlip, // i.e. both HFLIP and VFLIP
+	TileTransform_Unchanged,
+	TileTransform_HFlip,
+	TileTransform_VFlip,
+	TileTransform_DiagonalFlip, // i.e. both HFLIP and VFLIP
 
-	Transform_Count
+	TileTransform_Count
 };
+
+struct unique_tile;
 
 struct tile
 {
 	pixel Pixels[8 * 8];
-	tile* EquivalentUniqueTile;
+	unique_tile* EquivalentUniqueTile;
 	tile_transform_type EqualAfterTransform; // which transform you need to apply to make this tile equal to the above
 };
 
@@ -51,11 +53,9 @@ pixel* PixelAt(tile* Tile, u32 X, u32 Y)
 	return Result;
 }
 
-struct tile_variant
+struct unique_tile
 {
-	tile HFlipped;
-	tile VFlipped;
-	tile DiagonalFlipped;
+	tile Variants[TileTransform_Count];
 };
 
 struct tileset_image
