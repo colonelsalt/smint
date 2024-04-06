@@ -32,6 +32,11 @@ b32 AreTilesEqual(tile* A, tile* B)
 	return AreTilesEqualNoFlip(A, B);
 }
 
+void GenerateTileVariants(tile* Tile, tile_variant* OutVariant)
+{
+
+}
+
 int main(int ArgC, char** ArgV)
 {
 	if (ArgC != 3)
@@ -89,6 +94,7 @@ int main(int ArgC, char** ArgV)
 
 	u32 NumUniqueTiles = 0;
 	tile** MinimisedTiles = (tile**)malloc(sizeof(tile*) * OriginalImage.TileWidth * OriginalImage.TileHeight);
+	tile_variant* MinTileVariants = (tile_variant*)malloc(sizeof(tile_variant) * OriginalImage.TileWidth * OriginalImage.TileHeight);
 
 	for (u32 TileY = 0; TileY < OriginalImage.TileHeight; TileY++)
 	{
@@ -108,35 +114,47 @@ int main(int ArgC, char** ArgV)
 			}
 			if (IsTileUnique)
 			{
-				MinimisedTiles[NumUniqueTiles++] = Tile;
+				MinimisedTiles[NumUniqueTiles] = Tile;
+				GenerateTileVariants(Tile, MinTileVariants + NumUniqueTiles);
+				NumUniqueTiles++;
 			}
 		}
 	}
 
-	// TODO: Work out largest height of output image so width and height both evenly divide NumUniqueTiles (no blank/wasted tiles)
-	s32 OutputImageWidth = (s32)NumUniqueTiles * 8;
-	s32 OutputImageHeight = 1 * 8;
-	Assert(OutputImageWidth > 0);
+	// Work out most square-ish dimensions of output image so width and height both evenly divide NumUniqueTiles (no blank/wasted tiles)
+	u32 OutputTileWidth = (u32)sqrt(NumUniqueTiles) + 1;
+	u32 OutputTileHeight = NumUniqueTiles / OutputTileWidth;
+	while (!(NumUniqueTiles % OutputTileWidth == 0 && NumUniqueTiles % OutputTileHeight == 0))
+	{
+		OutputTileWidth--;
+		OutputTileHeight = NumUniqueTiles / OutputTileWidth;
+	}
+
+	s32 OutputImageWidth = (s32)OutputTileWidth * 8;
+	s32 OutputImageHeight = (s32)OutputTileHeight * 8;
+	Assert(OutputImageWidth > 0 && OutputTileHeight > 0);
 
 	pixel* OutputPixels = (pixel*)malloc(sizeof(pixel) * OutputImageWidth * OutputImageHeight);
 	
-	// TODO: This is just a temp 1D tile loop - needs rework once more ideal output dimensions worked out
-	u32 TileY = 0;
-	for (u32 TileX = 0; TileX < NumUniqueTiles; TileX++)
+	
+	for (u32 TileY = 0; TileY < OutputTileHeight; TileY++)
 	{
-		u32 TileIndex = TileX;
-		tile* SourceTile = MinimisedTiles[TileIndex];
-
-		for (u32 PixelY = 0; PixelY < 8; PixelY++)
+		for (u32 TileX = 0; TileX < OutputTileWidth; TileX++)
 		{
-			for (u32 PixelX = 0; PixelX < 8; PixelX++)
+			u32 TileIndex = TileY * OutputTileWidth + TileX;
+			tile* SourceTile = MinimisedTiles[TileIndex];
+
+			for (u32 PixelY = 0; PixelY < 8; PixelY++)
 			{
-				u32 DestIndex = TileY * OutputImageWidth * 8 + PixelY * OutputImageWidth + TileX * 8 + PixelX;
+				for (u32 PixelX = 0; PixelX < 8; PixelX++)
+				{
+					u32 DestIndex = TileY * OutputImageWidth * 8 + PixelY * OutputImageWidth + TileX * 8 + PixelX;
 
-				pixel* PixelToWrite = OutputPixels + DestIndex;
-				pixel* PixelToRead = PixelAt(SourceTile, PixelX, PixelY);
+					pixel* PixelToWrite = OutputPixels + DestIndex;
+					pixel* PixelToRead = PixelAt(SourceTile, PixelX, PixelY);
 
-				*PixelToWrite = *PixelToRead;
+					*PixelToWrite = *PixelToRead;
+				}
 			}
 		}
 	}
