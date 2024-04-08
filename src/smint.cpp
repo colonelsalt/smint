@@ -1,5 +1,11 @@
 #include "util.h"
 #include "smint.h"
+#include <sys/stat.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/error/en.h"
 
 #define STBI_ASSERT(X) Assert(X)
 #define STB_IMAGE_IMPLEMENTATION
@@ -9,6 +15,61 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+enum tiled_flip_flags : u32
+{
+	TiledFlag_HFlip 	   = 0x80000000,
+	TiledFlag_VFlip 	   = 0x40000000,
+	TiledFlag_DiagonalFlip = 0x20000000,
+	TiledFlag_Rotated      = 0x10000000
+};
+
+struct str_buffer
+{
+	u8* Data;
+	u64 Size;
+};
+
+str_buffer ReadTextFile(char* FileName)
+{
+	str_buffer Result = {};
+    FILE* File = fopen(FileName, "rt");
+    if(File)
+    {
+		#if _WIN32
+        struct __stat64 Stat;
+        _stat64(FileName, &Stat);
+		#else
+        struct stat Stat;
+        stat(FileName, &Stat);
+		#endif
+        
+        Result.Data = (u8*)malloc(sizeof(u8) * Stat.st_size);
+		Result.Size = Stat.st_size;
+        if(Result.Data)
+        {
+			Result.Size = fread(Result.Data, sizeof(u8), Stat.st_size, File);
+			if (ferror(File))
+			{
+				fprintf(stderr, "ERROR: Unable to read '%s'.\n", FileName);
+				free(Result.Data);
+				Result.Data = nullptr;
+			}
+			else
+			{
+				// Not quite sure why there seems to be a stray 'r' at the end of the string... mangled line ending..?
+				Result.Data[Result.Size] = 0;
+			}
+        }
+        
+        fclose(File);
+    }
+    else
+    {
+        fprintf(stderr, "ERROR: Unable to open \"%s\".\n", FileName);
+    }
+    
+    return Result;
+}
 
 b32 AreTilesEqualNoFlip(tile* A, tile* B)
 {
@@ -98,7 +159,7 @@ int main(int ArgC, char** ArgV)
 	}
 
 	char* TilesetFileName = ArgV[1];
-	char* MapFileName = ArgV[2];
+	char* MapFileName = ArgV[2];	
 
 	s32 ImageWidth, ImageHeight, ImageNumComponents;
 	u8* ImageData = stbi_load(TilesetFileName, &ImageWidth, &ImageHeight, &ImageNumComponents, 4);
@@ -167,9 +228,131 @@ int main(int ArgC, char** ArgV)
 			}
 			if (IsTileUnique)
 			{
+				unique_tile* NewUniqueTile = MinimisedTiles + NumUniqueTiles;
 				GenerateTileVariants(Tile, MinimisedTiles + NumUniqueTiles);
+
+				Tile->EquivalentUniqueTile = NewUniqueTile;
+				Tile->EqualAfterTransform = TileTransform_Unchanged;
+
 				NumUniqueTiles++;
 			}
+		}
+	}
+
+	str_buffer MapFileContents = ReadTextFile(MapFileName);
+	if (!MapFileContents.Data)
+	{
+		return 1;
+	}
+
+	rapidjson::Document JsonDoc;
+	if (JsonDoc.ParseInsitu((char*)MapFileContents.Data).HasParseError())
+	{
+		fprintf(stderr, "ERROR: Failed to parse '%s': %s\n", MapFileName, rapidjson::GetParseError_En(JsonDoc.GetParseError()));
+		return 1;
+	}
+
+	if (!JsonDoc.HasMember("layers") || !JsonDoc["layers"].IsArray())
+	{
+		fprintf(stderr, "ERROR: Invalid map format - 'layers' element not found or invalid format.\n");
+		return 1;
+	}
+
+
+	if (!JsonDoc.HasMember("tilesets") || !JsonDoc["tilesets"].IsArray())
+	{
+		fprintf(stderr, "ERROR: Invalid map format - 'tilesets' not found or invalid format.\n");
+		return 1;
+	}
+	rapidjson::Value& TilesetsArray = JsonDoc["tilesets"];
+	if (TilesetsArray.Size() == 0)
+	{
+		fprintf(stderr, "ERROR: 'tilesets' array in map file is empty.\n");
+		return 1;
+	}
+	if (TilesetsArray.Size() > 1)
+	{
+		printf("WARNING: Multiple tilesets in the same map is not supported yet - only tiles from the first tileset will be minimised.\n");
+	}
+	rapidjson::Value& TilesetObj = TilesetsArray[0];
+	if (!TilesetObj.IsObject() || !TilesetObj.HasMember("firstgid") || !TilesetObj["firstgid"].IsUint())
+	{
+		fprintf(stderr, "ERROR: Could not find 'firstgid' in map's 'tileset' property.\n");
+		return 1;
+	}
+	u32 FirstTileId = TilesetObj["firstgid"].GetUint();
+
+	rapidjson::Value& Layers = JsonDoc["layers"];
+	for (u32 LayerIndex = 0; LayerIndex < Layers.Size(); LayerIndex++)
+	{
+		rapidjson::Value& Layer = Layers[LayerIndex];
+		if (!Layer.IsObject() || !Layer.HasMember("data") || !Layer["data"].IsArray())
+		{
+			fprintf(stderr, "ERROR: Invalid map format - layer %u has unexpected format and/or is missing 'data' array.\n", LayerIndex);
+			return 1;
+		}
+
+		rapidjson::Value& LayerData = Layer["data"];
+		for (u32 DataIndex = 0; DataIndex < LayerData.Size(); DataIndex++)
+		{
+			u32 TileIndex = LayerData[DataIndex].GetUint();
+			if (TileIndex == 0)
+			{
+				continue; // Blank tile
+			}
+
+			u32 FlipFlags = 0;
+			if (TileIndex & TiledFlag_HFlip)
+			{
+				FlipFlags |= TiledFlag_HFlip;
+				TileIndex &= ~TiledFlag_HFlip;
+			}
+			if (TileIndex & TiledFlag_VFlip)
+			{
+				FlipFlags |= TiledFlag_VFlip;
+				TileIndex &= ~TiledFlag_VFlip;
+			}
+			if (TileIndex & TiledFlag_DiagonalFlip)
+			{
+				// tbh I don't actually know how to diagonally flip a tile in Tiled, but if we ever encounter one, let's treat it like HFLIP+VFLIP
+				FlipFlags |= TiledFlag_HFlip | TiledFlag_VFlip;
+				TileIndex &= ~TiledFlag_DiagonalFlip;
+			}
+			if (TileIndex & TiledFlag_Rotated)
+			{
+				printf("WARNING: (Layer %u, entry %u) Tile rotation is not supported for GBA - this entry will be unchanged in the output map.\n",
+				       LayerIndex, DataIndex);
+				TileIndex &= ~TiledFlag_Rotated;
+			}
+			TileIndex -= FirstTileId;
+			Assert(TileIndex < OriginalImage.TileWidth * OriginalImage.TileHeight);
+
+			tile* SourceTile = OriginalImage.Tiles + TileIndex;
+			unique_tile* UniqueTile = SourceTile->EquivalentUniqueTile;
+			u32 NewTileIndex = UniqueTile - MinimisedTiles;
+			Assert(NewTileIndex < NumUniqueTiles);
+
+			NewTileIndex += FirstTileId;
+
+			// The output entry's flip is `OldFlip` XOR `NewFlip`
+			switch (SourceTile->EqualAfterTransform)
+			{
+				case TileTransform_HFlip:
+				{
+					FlipFlags ^= TiledFlag_HFlip;
+				} break;
+				case TileTransform_VFlip:
+				{
+					FlipFlags ^= TiledFlag_VFlip;
+				} break;
+				case TileTransform_DiagonalFlip:
+				{
+					FlipFlags ^= (TiledFlag_HFlip | TiledFlag_VFlip);
+				} break;
+			}
+			NewTileIndex |= FlipFlags;
+
+			LayerData[DataIndex].SetUint(NewTileIndex);
 		}
 	}
 
@@ -216,7 +399,13 @@ int main(int ArgC, char** ArgV)
 		fprintf(stderr, "Failed to write output image.\n");
 		return 1;
 	}
+
+	rapidjson::StringBuffer OutStringBuffer(0, MapFileContents.Size);
+	rapidjson::Writer<rapidjson::StringBuffer> JsonWriter(OutStringBuffer);
+	JsonDoc.Accept(JsonWriter);
 	
+	FILE* OutMapFile = fopen("out.tmj", "wb");
+	fprintf(OutMapFile, "%s", OutStringBuffer.GetString());
 
 	stbi_image_free(ImageData);
 }
