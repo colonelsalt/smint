@@ -92,6 +92,9 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 {
 	minimised_tileset Result = {};
 
+	char TilesetBaseName[PATH_MAX];
+	ExtractBaseFileName(TilesetPath, TilesetBaseName);
+
 	char FileExtension[16];
 	GetFileExtension(TilesetPath, FileExtension);
 	if (strcmp(FileExtension, ".tsj") != 0 && strcmp(FileExtension, ".json") != 0)
@@ -227,8 +230,17 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	}
 	if (Result.NumUniqueTiles == OriginalImage->TileWidth * OriginalImage->TileHeight)
 	{
-		printf("Tileset '%s' is already minimised; nothing to do.\n", TilesetPath);
+		printf("Tileset '%s' is already minimal; nothing to do.\n\n", TilesetBaseName);
 		Result.IsUnchanged = true;
+		if (CurrentWorkingDir)
+		{
+			// Change working directory back to where the .tmj file is
+			if (!ChangeWorkingDir(CurrentWorkingDir))
+			{
+				Result.Error = true;
+				return Result;
+			}
+		}
 		return Result;
 	}
 
@@ -343,8 +355,12 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 
 	u32 StartNumTiles = OriginalImage->TileWidth * OriginalImage->TileHeight;
 	f32 Pst = roundf((((f32)StartNumTiles - (f32)Result.NumUniqueTiles) / (f32)StartNumTiles) * 100.0f);
-	printf("Reduced number of tiles in '%s': %u->%u (-%.0f%%)\n", TilesetPath, StartNumTiles, Result.NumUniqueTiles, Pst);
+	printf("Reduced number of tiles in '%s': %u->%u (-%.0f%%)\n", TilesetBaseName, StartNumTiles, Result.NumUniqueTiles, Pst);
 
-	stbi_image_free(ImageData);
+	char ImageBaseName[PATH_MAX];
+	ExtractBaseFileName(ImageOutPath, ImageBaseName);
+	printf("Wrote minimised tile image to '%s'.\n\n", ImageBaseName);
+
+	//stbi_image_free(ImageData);
 	return Result;
 }

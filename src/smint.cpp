@@ -195,9 +195,15 @@ int main(int ArgC, char** ArgV)
 	char MapOutPath[PATH_MAX];
 	AppendToFilePath(MapFilePath, "_min", MapOutPath);
 
+	char MapInBaseName[PATH_MAX];
+	ExtractBaseFileName(MapFilePath, MapInBaseName);
+
+	char MapOutBaseName[PATH_MAX];
+	ExtractBaseFileName(MapOutPath, MapOutBaseName);
+
 	if (EverythingAlreadyMinimised)
 	{
-		printf("Every tileset in map file '%s' is already minimised; no changes have been made.\n", MapFilePath);
+		printf("Every tileset in map file '%s' is already minimal; no changes have been made.\n", MapInBaseName);
 	}
 	else if (!WriteJsonToFile(&JsonDoc, MapOutPath, MapFileContents.Size))
 	{
@@ -205,7 +211,7 @@ int main(int ArgC, char** ArgV)
 	}
 	else
 	{
-		printf("Map '%s' successfully minimised to '%s'.\n", MapFilePath, MapOutPath);
+		printf("Map '%s' successfully minimised to '%s'.\n", MapInBaseName, MapOutBaseName);
 	}
 
 	return 0;

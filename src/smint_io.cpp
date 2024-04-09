@@ -22,11 +22,11 @@ str_buffer ReadTextFile(const char* FileName)
         stat(FileName, &Stat);
 		#endif
         
-        Result.Data = (char*)malloc(sizeof(char) * Stat.st_size);
+        Result.Data = (char*)malloc(sizeof(char) * Stat.st_size + 1);
 		Result.Size = Stat.st_size;
         if(Result.Data)
         {
-			Result.Size = fread(Result.Data, sizeof(char), Stat.st_size, File);
+			size_t BytesRead = fread(Result.Data, sizeof(char), Stat.st_size, File);
 			if (ferror(File))
 			{
 				fprintf(stderr, "ERROR: Unable to read '%s' into string buffer.\n", FileName);
@@ -182,4 +182,23 @@ void StripFileExtension(const char* FilePath, char* OutStr)
 		OutStr[i] = FilePath[i];
 	}
 	OutStr[i] = 0;
+}
+
+void ExtractBaseFileName(const char* FilePath, char* OutName)
+{
+	s32 IndexOfLastSlash = -1;
+	for (s32 i = 0; FilePath[i]; i++)
+	{
+		if (FilePath[i] == '/' || FilePath[i] == '\\')
+		{
+			IndexOfLastSlash = i;
+		}
+	}
+
+	s32 OutIndex = 0;
+	for (u32 i = IndexOfLastSlash + 1; FilePath[i]; i++)
+	{
+		OutName[OutIndex++] = FilePath[i];
+	}
+	OutName[OutIndex] = 0;
 }
