@@ -85,10 +85,10 @@ struct minimised_tileset
 	unique_tile* MinimisedTiles;
 	u32 NumUniqueTiles;
 	b32 Error;
-	char NewTilesetPath[MAX_PATH]; // Relative to the map file
+	b32 IsUnchanged;
 };
 
-minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingDir = nullptr)
+minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPath, char* CurrentWorkingDir = nullptr)
 {
 	minimised_tileset Result = {};
 
@@ -96,7 +96,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingD
 	GetFileExtension(TilesetPath, FileExtension);
 	if (strcmp(FileExtension, ".tsj") != 0 && strcmp(FileExtension, ".json") != 0)
 	{
-		fprintf(stderr, "ERROR: Tileset extension '%s' is not supported - must be .tsj/.json\n", FileExtension);
+		fprintf(stderr, "ERROR: Tileset file '%s' has unsupported extension '%s' - must be .tsj/.json\n", TilesetPath, FileExtension);
 		Result.Error = true;
 		return Result;
 	}
@@ -225,6 +225,12 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingD
 			}
 		}
 	}
+	if (Result.NumUniqueTiles == OriginalImage->TileWidth * OriginalImage->TileHeight)
+	{
+		printf("Tileset '%s' is already minimised; nothing to do.\n", TilesetPath);
+		Result.IsUnchanged = true;
+		return Result;
+	}
 
 	// Work out most square-ish dimensions of output image so width and height both evenly divide NumUniqueTiles (no blank/wasted tiles)
 	u32 OutputTileWidth = (u32)sqrt(Result.NumUniqueTiles) + 1;
@@ -264,13 +270,14 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingD
 	}
 
 	char NewName[PATH_MAX];
+	*NewName = 0;
 	if (JsonDoc.HasMember("name") && JsonDoc["name"].IsString())
 	{
 		const char* OriginalName = JsonDoc["name"].GetString();
 		strcat(NewName, OriginalName);
 		strcat(NewName, "_min");
 
-		JsonDoc["name"].SetString(NewName, strlen(NewName));
+		JsonDoc["name"].SetString(NewName, strlen(NewName), JsonDoc.GetAllocator());
 	}
 	else
 	{
@@ -305,6 +312,19 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingD
 	}
 
 
+	char ImageOutPath[PATH_MAX];
+	StripFileExtension(ImagePath, ImageOutPath);
+	strcat(ImageOutPath, "_min.bmp");
+
+	if (!stbi_write_bmp(ImageOutPath, OutputImageWidth, OutputImageHeight, 4, OutputPixels))
+	{
+		fprintf(stderr, "ERROR: Failed to write output image '%s'.\n", ImageOutPath);
+		Result.Error = true;
+		return Result;
+	}
+
+	JsonDoc["image"].SetString(ImageOutPath, strlen(ImageOutPath), JsonDoc.GetAllocator());
+
 	if (CurrentWorkingDir)
 	{
 		// Change working directory back to where the .tmj file is
@@ -314,27 +334,16 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* CurrentWorkingD
 			return Result;
 		}
 	}
-
-	char ImageOutPath[PATH_MAX];
-	StripFileExtension(ImagePath, ImageOutPath);
-	strcat(ImageOutPath, "_min.bmp");
-
-	if (!stbi_write_bmp(ImageOutPath, OutputImageWidth, OutputImageHeight, 4, OutputPixels))
-	{
-		fprintf(stderr, "Failed to write output image.\n");
-		Result.Error = true;
-		return Result;
-	}
-
-	JsonDoc["image"].SetString(ImageOutPath, strlen(ImageOutPath));
-
-
-	AppendToFilePath(TilesetPath, "_min", Result.NewTilesetPath);
-	if (!WriteJsonToFile(&JsonDoc, Result.NewTilesetPath, TilesetSpecStr.Size))
+	AppendToFilePath(TilesetPath, "_min", OutNewTilesetPath);
+	if (!WriteJsonToFile(&JsonDoc, OutNewTilesetPath, TilesetSpecStr.Size))
 	{
 		Result.Error = true;
 		return Result;
 	}
+
+	u32 StartNumTiles = OriginalImage->TileWidth * OriginalImage->TileHeight;
+	f32 Pst = roundf((((f32)StartNumTiles - (f32)Result.NumUniqueTiles) / (f32)StartNumTiles) * 100.0f);
+	printf("Reduced number of tiles in '%s': %u->%u (-%.0f%%)\n", TilesetPath, StartNumTiles, Result.NumUniqueTiles, Pst);
 
 	stbi_image_free(ImageData);
 	return Result;

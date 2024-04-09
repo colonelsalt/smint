@@ -29,7 +29,7 @@ str_buffer ReadTextFile(const char* FileName)
 			Result.Size = fread(Result.Data, sizeof(char), Stat.st_size, File);
 			if (ferror(File))
 			{
-				fprintf(stderr, "ERROR: Unable to read '%s'.\n", FileName);
+				fprintf(stderr, "ERROR: Unable to read '%s' into string buffer.\n", FileName);
 				free(Result.Data);
 				Result.Data = nullptr;
 			}
@@ -44,7 +44,7 @@ str_buffer ReadTextFile(const char* FileName)
     }
     else
     {
-        fprintf(stderr, "ERROR: Unable to open '%s'.\n", FileName);
+        fprintf(stderr, "ERROR: Unable to open '%s' for reading.\n", FileName);
     }
     
     return Result;
@@ -63,7 +63,7 @@ bool WriteJsonToFile(rapidjson::Document* JsonDoc, char* FilePath, u32 SizeHint 
 	FILE* OutFile = fopen(FilePath, "wb");
 	if (!OutFile)
 	{
-		fprintf(stderr, "ERROR: Failed to open file '%s'\n", FilePath);
+		fprintf(stderr, "ERROR: Failed to open file '%s' for writing.\n", FilePath);
 		return false;
 	}
 
@@ -101,7 +101,6 @@ bool ChangeWorkingDir(char* DirPath)
 	return true;
 }
 #endif
-
 
 void AppendToFilePath(const char* FilePath, char* Suffix, char* OutPath)
 {

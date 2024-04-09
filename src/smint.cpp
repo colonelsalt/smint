@@ -87,6 +87,7 @@ int main(int ArgC, char** ArgV)
 		}
 	}
 
+	b32 EverythingAlreadyMinimised = true;
 	for (u32 TilesetIndex = 0; TilesetIndex < TilesetsArray.Size(); TilesetIndex++)
 	{
 		rapidjson::Value& TilesetObj = TilesetsArray[TilesetIndex];
@@ -99,13 +100,19 @@ int main(int ArgC, char** ArgV)
 		u32 FirstTileId = TilesetObj["firstgid"].GetUint();
 		const char* TilesetPath = TilesetObj["source"].GetString();
 
-		minimised_tileset MinTiles = MinimiseTileset(TilesetPath);
+		char NewTilesetPath[PATH_MAX];
+		minimised_tileset MinTiles = MinimiseTileset(TilesetPath, NewTilesetPath, MapWorkingDir);
 		if (MinTiles.Error)
 		{
 			return 1;
 		}
+		else if (MinTiles.IsUnchanged)
+		{
+			continue;
+		}
+		EverythingAlreadyMinimised = false;
 
-		TilesetObj["source"].SetString(MinTiles.NewTilesetPath, strlen(MinTiles.NewTilesetPath));
+		TilesetObj["source"].SetString(NewTilesetPath, strlen(NewTilesetPath), JsonDoc.GetAllocator());
 
 		for (u32 LayerIndex = 0; LayerIndex < Layers.Size(); LayerIndex++)
 		{
@@ -149,7 +156,11 @@ int main(int ArgC, char** ArgV)
 					TileIndex &= ~TiledFlag_Rotated;
 				}
 				TileIndex -= FirstTileId;
-				Assert(TileIndex < MinTiles.OriginalImage.TileWidth * MinTiles.OriginalImage.TileHeight);
+				if (TileIndex >= MinTiles.OriginalImage.TileWidth * MinTiles.OriginalImage.TileHeight)
+				{
+					// This tile belongs to another tileset; we'll get it later
+					continue;
+				}
 
 				tile* SourceTile = MinTiles.OriginalImage.Tiles + TileIndex;
 				unique_tile* UniqueTile = SourceTile->EquivalentUniqueTile;
@@ -184,9 +195,17 @@ int main(int ArgC, char** ArgV)
 	char MapOutPath[PATH_MAX];
 	AppendToFilePath(MapFilePath, "_min", MapOutPath);
 
-	if (!WriteJsonToFile(&JsonDoc, MapOutPath, MapFileContents.Size))
+	if (EverythingAlreadyMinimised)
+	{
+		printf("Every tileset in map file '%s' is already minimised; no changes have been made.\n", MapFilePath);
+	}
+	else if (!WriteJsonToFile(&JsonDoc, MapOutPath, MapFileContents.Size))
 	{
 		return 1;
+	}
+	else
+	{
+		printf("Map '%s' successfully minimised to '%s'.\n", MapFilePath, MapOutPath);
 	}
 
 	return 0;
