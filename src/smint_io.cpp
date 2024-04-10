@@ -118,7 +118,7 @@ void GetFullPath(const char* RelPath, char* OutFullPath)
 	}
 }
 
-void AppendToFilePath(const char* FilePath, char* Suffix, char* OutPath)
+void AppendToFilePath(const char* FilePath, const char* Suffix, char* OutPath)
 {
 	u32 IndexOfLastDot = 0;
 	for (u32 i = 0; FilePath[i]; i++)

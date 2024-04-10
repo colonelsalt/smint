@@ -29,7 +29,7 @@ int main(int ArgC, char** ArgV)
 {
 	if (ArgC != 2)
 	{
-		printf("Usage: smint.exe tiled_map.tmj\n");
+		printf("Usage: smint tiled_map.tmj\n");
 		return 1;
 	}
 
