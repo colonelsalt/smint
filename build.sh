@@ -2,4 +2,4 @@
 
 mkdir -p build
 
-g++ -g -o build/smint.o -Iinclude src/smint.cpp
+g++ -g -o ./build/smint -I./include ./src/smint.cpp
