@@ -27,7 +27,7 @@ smint parses the map file (.tmj), and finds all tileset (.tsj) files pointed to 
 
 Any tileset in the input map that is already minimal (i.e. contains no duplicate tiles) is left untouched, and if this is the case for all tilesets in the map, no output map is produced.
 ### Download
-There's a Windows x86_64 binary on the [releases] page.
+There's a Windows x86_64 binary on the [releases](https://github.com/colonelsalt/smint/releases) page.
 
 ### Building
 
