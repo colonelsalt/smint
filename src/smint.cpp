@@ -6,7 +6,6 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/error/en.h"
 
-
 #define STBI_ASSERT(X) Assert(X)
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -34,7 +33,10 @@ int main(int ArgC, char** ArgV)
 		return 1;
 	}
 
-	char* MapFilePath = ArgV[1];
+	char MapFilePath[PATH_MAX];
+	char* MapRelPath = ArgV[1];
+	GetFullPath(MapRelPath, MapFilePath);
+	
 	char MapFileExtension[16];
 	GetFileExtension(MapFilePath, MapFileExtension);
 	if (strcmp(MapFileExtension, ".tmj") != 0 && strcmp(MapFileExtension, ".json"))
@@ -76,9 +78,13 @@ int main(int ArgC, char** ArgV)
 		return 1;
 	}
 	
+	char MapRelDir[MAX_PATH];
 	char MapWorkingDir[MAX_PATH];
-	StripFileName(MapFilePath, MapWorkingDir);
-	if (*MapWorkingDir)
+
+	StripFileName(MapFilePath, MapRelDir);
+	GetFullPath(MapRelDir, MapWorkingDir);
+
+	if (*MapRelDir)
 	{
 		// Map is in a different directory to where we are
 		if (!ChangeWorkingDir(MapWorkingDir))

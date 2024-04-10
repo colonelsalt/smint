@@ -245,12 +245,12 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	}
 
 	// Work out most square-ish dimensions of output image so width and height both evenly divide NumUniqueTiles (no blank/wasted tiles)
-	u32 OutputTileWidth = (u32)sqrt(Result.NumUniqueTiles) + 1;
-	u32 OutputTileHeight = Result.NumUniqueTiles / OutputTileWidth;
+	u32 OutputTileHeight = (u32)sqrt(Result.NumUniqueTiles);
+	u32 OutputTileWidth = Result.NumUniqueTiles / OutputTileHeight;
 	while (!(Result.NumUniqueTiles % OutputTileWidth == 0 && Result.NumUniqueTiles % OutputTileHeight == 0))
 	{
-		OutputTileWidth--;
-		OutputTileHeight = Result.NumUniqueTiles / OutputTileWidth;
+		OutputTileHeight--;
+		OutputTileWidth = Result.NumUniqueTiles / OutputTileHeight;
 	}
 
 	// Write back out minimised tileset image

@@ -13,4 +13,9 @@ typedef int64_t s64;
 typedef uint64_t u64;
 
 #define ArrayCount(X) (sizeof(X) / sizeof((X)[0]))
+
+#if _WIN32
+#define Assert(X) {if (!(X)) __debugbreak();}
+#else
 #define Assert(X) {if (!(X)) *(int*)0 = 42;}
+#endif

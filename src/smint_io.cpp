@@ -1,4 +1,5 @@
 #include <sys/stat.h>
+#include <cstdlib>
 
 constexpr u32 PATH_MAX = 256;
 
@@ -26,7 +27,7 @@ str_buffer ReadTextFile(const char* FileName)
 		Result.Size = Stat.st_size;
         if(Result.Data)
         {
-			size_t BytesRead = fread(Result.Data, sizeof(char), Stat.st_size, File);
+			size_t NumChars = fread(Result.Data, sizeof(char), Stat.st_size, File);
 			if (ferror(File))
 			{
 				fprintf(stderr, "ERROR: Unable to read '%s' into string buffer.\n", FileName);
@@ -35,8 +36,8 @@ str_buffer ReadTextFile(const char* FileName)
 			}
 			else
 			{
-				// Not quite sure why there seems to be a stray 'r' at the end of the string... mangled line ending..?
-				Result.Data[Result.Size] = 0;
+				Assert(NumChars <= sizeof(char) * Stat.st_size);
+				Result.Data[NumChars] = 0;
 			}
         }
         
@@ -77,7 +78,6 @@ bool WriteJsonToFile(rapidjson::Document* JsonDoc, char* FilePath, u32 SizeHint 
 	return true;
 }
 
-bool ChangeWorkingDir(char* DirPath);
 #if _WIN32
 #include <Windows.h>
 bool ChangeWorkingDir(char* DirPath)
@@ -101,6 +101,20 @@ bool ChangeWorkingDir(char* DirPath)
 	return true;
 }
 #endif
+
+void GetFullPath(const char* RelPath, char* OutFullPath)
+{
+	char* Result;
+#if _WIN32
+	Result = _fullpath(OutFullPath, RelPath, PATH_MAX);
+#else
+	Result = realpath(RelPath, OutFullPath);
+#endif
+	if (!Result)
+	{
+		fprintf(stderr, "Failed to get absolute path for '%s'\n.", RelPath);
+	}
+}
 
 void AppendToFilePath(const char* FilePath, char* Suffix, char* OutPath)
 {
