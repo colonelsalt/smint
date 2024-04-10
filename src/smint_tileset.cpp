@@ -92,7 +92,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 {
 	minimised_tileset Result = {};
 
-	char TilesetBaseName[PATH_MAX];
+	char TilesetBaseName[MAX_PATH];
 	ExtractBaseFileName(TilesetPath, TilesetBaseName);
 
 	char FileExtension[16];
@@ -135,7 +135,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	}
 
 	const char* ImagePath = JsonDoc["image"].GetString();
-	char TilesetWorkingDir[PATH_MAX];
+	char TilesetWorkingDir[MAX_PATH];
 	StripFileName(TilesetPath, TilesetWorkingDir);
 
 	if (*TilesetWorkingDir)
@@ -281,7 +281,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 		}
 	}
 
-	char NewName[PATH_MAX];
+	char NewName[MAX_PATH];
 	*NewName = 0;
 	if (JsonDoc.HasMember("name") && JsonDoc["name"].IsString())
 	{
@@ -324,11 +324,12 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	}
 
 
-	char ImageOutPath[PATH_MAX];
+	char ImageOutPath[MAX_PATH];
 	StripFileExtension(ImagePath, ImageOutPath);
-	strcat(ImageOutPath, "_min.bmp");
+	strcat(ImageOutPath, "_min.png");
 
-	if (!stbi_write_bmp(ImageOutPath, OutputImageWidth, OutputImageHeight, 4, OutputPixels))
+	s32 Stride = OutputImageWidth * sizeof(pixel);
+	if (!stbi_write_png(ImageOutPath, OutputImageWidth, OutputImageHeight, 4, OutputPixels, Stride))
 	{
 		fprintf(stderr, "ERROR: Failed to write output image '%s'.\n", ImageOutPath);
 		Result.Error = true;
@@ -357,7 +358,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	f32 Pst = roundf((((f32)StartNumTiles - (f32)Result.NumUniqueTiles) / (f32)StartNumTiles) * 100.0f);
 	printf("Reduced number of tiles in '%s': %u->%u (-%.0f%%)\n", TilesetBaseName, StartNumTiles, Result.NumUniqueTiles, Pst);
 
-	char ImageBaseName[PATH_MAX];
+	char ImageBaseName[MAX_PATH];
 	ExtractBaseFileName(ImageOutPath, ImageBaseName);
 	printf("Wrote minimised tile image to '%s'.\n\n", ImageBaseName);
 

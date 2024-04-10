@@ -33,7 +33,7 @@ int main(int ArgC, char** ArgV)
 		return 1;
 	}
 
-	char MapFilePath[PATH_MAX];
+	char MapFilePath[MAX_PATH];
 	char* MapRelPath = ArgV[1];
 	GetFullPath(MapRelPath, MapFilePath);
 	
@@ -106,7 +106,7 @@ int main(int ArgC, char** ArgV)
 		u32 FirstTileId = TilesetObj["firstgid"].GetUint();
 		const char* TilesetPath = TilesetObj["source"].GetString();
 
-		char NewTilesetPath[PATH_MAX];
+		char NewTilesetPath[MAX_PATH];
 		minimised_tileset MinTiles = MinimiseTileset(TilesetPath, NewTilesetPath, MapWorkingDir);
 		if (MinTiles.Error)
 		{
@@ -198,13 +198,13 @@ int main(int ArgC, char** ArgV)
 		}
 	}
 
-	char MapOutPath[PATH_MAX];
+	char MapOutPath[MAX_PATH];
 	AppendToFilePath(MapFilePath, "_min", MapOutPath);
 
-	char MapInBaseName[PATH_MAX];
+	char MapInBaseName[MAX_PATH];
 	ExtractBaseFileName(MapFilePath, MapInBaseName);
 
-	char MapOutBaseName[PATH_MAX];
+	char MapOutBaseName[MAX_PATH];
 	ExtractBaseFileName(MapOutPath, MapOutBaseName);
 
 	if (EverythingAlreadyMinimised)

@@ -1,7 +1,9 @@
 #include <sys/stat.h>
 #include <cstdlib>
 
-constexpr u32 PATH_MAX = 256;
+#ifndef MAX_PATH
+#define MAX_PATH 260
+#endif
 
 struct str_buffer
 {
@@ -106,7 +108,7 @@ void GetFullPath(const char* RelPath, char* OutFullPath)
 {
 	char* Result;
 #if _WIN32
-	Result = _fullpath(OutFullPath, RelPath, PATH_MAX);
+	Result = _fullpath(OutFullPath, RelPath, MAX_PATH);
 #else
 	Result = realpath(RelPath, OutFullPath);
 #endif
