@@ -78,6 +78,44 @@ void GenerateTileVariants(tile* Tile, unique_tile* OutUniqueTile)
 	}
 }
 
+b32 ParseTilesetJson(const char* TilesetPath, u64 OutStringLength, rapidjson::Document& OutJsonDoc)
+{
+	char FileExtension[16];
+	GetFileExtension(TilesetPath, FileExtension);
+	if (strcmp(FileExtension, ".tsj") != 0 && strcmp(FileExtension, ".json") != 0)
+	{
+		fprintf(stderr, "ERROR: Tileset file '%s' has unsupported extension '%s' - must be .tsj/.json\n", TilesetPath, FileExtension);
+		return false;
+	}
+
+	// Parse tileset .tsj file
+	str_buffer TilesetSpecStr = ReadTextFile(TilesetPath);
+	OutStringLength = TilesetSpecStr.Size;
+	if (OutJsonDoc.ParseInsitu(TilesetSpecStr.Data).HasParseError())
+	{
+		fprintf(stderr, "ERROR: Failed to parse tileset '%s': %s\n", TilesetPath, rapidjson::GetParseError_En(OutJsonDoc.GetParseError()));
+		return false;
+	}
+	if (!OutJsonDoc.HasMember("image") || !OutJsonDoc["image"].IsString())
+	{
+		fprintf(stderr, "ERROR: Could not find 'image' field in tileset file.\n");
+		return false;
+	}
+	if (OutJsonDoc.HasMember("tilewidth") && OutJsonDoc["tilewidth"].IsUint() &&
+		OutJsonDoc.HasMember("tileheight") && OutJsonDoc["tileheight"].IsUint())
+	{
+		if (OutJsonDoc["tilewidth"].GetUint() != 8 || OutJsonDoc["tileheight"].GetUint() != 8)
+		{
+			fprintf(stderr, "ERROR: Tile dimensions in tileset '%s' are not 8x8 - cannot minimise.\n", TilesetPath);
+			return false;
+		}
+	}
+	else
+	{
+		printf("WARNING: No tile dimensions found in tileset file '%s'; proceeding on the assumption that tiles are 8x8\n", TilesetPath);
+	}
+	return true;
+}
 
 struct minimised_tileset
 {
@@ -88,51 +126,17 @@ struct minimised_tileset
 	b32 IsUnchanged;
 };
 
-minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPath, char* CurrentWorkingDir = nullptr)
+minimised_tileset MinimiseTileset(const char* TilesetPath,
+								  rapidjson::Document& JsonDoc,
+								  u64 StringLength,
+								  char* OutNewTilesetPath,
+								  char* CurrentWorkingDir = nullptr,
+								  b8* TilesInUse = nullptr)
 {
 	minimised_tileset Result = {};
 
 	char TilesetBaseName[MAX_PATH];
 	ExtractBaseFileName(TilesetPath, TilesetBaseName);
-
-	char FileExtension[16];
-	GetFileExtension(TilesetPath, FileExtension);
-	if (strcmp(FileExtension, ".tsj") != 0 && strcmp(FileExtension, ".json") != 0)
-	{
-		fprintf(stderr, "ERROR: Tileset file '%s' has unsupported extension '%s' - must be .tsj/.json\n", TilesetPath, FileExtension);
-		Result.Error = true;
-		return Result;
-	}
-
-	// Parse tileset .tsj file
-	rapidjson::Document JsonDoc;
-	str_buffer TilesetSpecStr = ReadTextFile(TilesetPath);
-	if (JsonDoc.ParseInsitu(TilesetSpecStr.Data).HasParseError())
-	{
-		fprintf(stderr, "ERROR: Failed to parse tileset '%s': %s\n", TilesetPath, rapidjson::GetParseError_En(JsonDoc.GetParseError()));
-		Result.Error = true;
-		return Result;
-	}
-	if (!JsonDoc.HasMember("image") || !JsonDoc["image"].IsString())
-	{
-		fprintf(stderr, "ERROR: Could not find 'image' field in tileset file.\n");
-		Result.Error = true;
-		return Result;
-	}
-	if (JsonDoc.HasMember("tilewidth") && JsonDoc["tilewidth"].IsUint() &&
-		JsonDoc.HasMember("tileheight") && JsonDoc["tileheight"].IsUint())
-	{
-		if (JsonDoc["tilewidth"].GetUint() != 8 || JsonDoc["tileheight"].GetUint() != 8)
-		{
-			fprintf(stderr, "ERROR: Tile dimensions in tileset '%s' are not 8x8 - cannot minimise.\n", TilesetPath);
-			Result.Error = true;
-			return Result;
-		}
-	}
-	else
-	{
-		printf("WARNING: No tile dimensions found in tileset file '%s'; proceeding on the assumption that tiles are 8x8\n", TilesetPath);
-	}
 
 	const char* ImagePath = JsonDoc["image"].GetString();
 	char TilesetWorkingDir[MAX_PATH];
@@ -204,6 +208,14 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 	{
 		for (u32 TileX = 0; TileX < OriginalImage->TileWidth; TileX++)
 		{
+			u32 TileIndex = TileY * OriginalImage->TileWidth + TileX;
+			Assert(TileIndex < OriginalImage->TileWidth * OriginalImage->TileHeight);
+			if (TilesInUse && !TilesInUse[TileIndex])
+			{
+				// If this tile isn't used anywhere in the map, drop it immediately
+				continue;
+			}
+
 			tile* Tile = TileAt(OriginalImage, TileX, TileY);
 
 			b32 IsTileUnique = true;
@@ -348,7 +360,7 @@ minimised_tileset MinimiseTileset(const char* TilesetPath, char* OutNewTilesetPa
 		}
 	}
 	AppendToFilePath(TilesetPath, "_min", OutNewTilesetPath);
-	if (!WriteJsonToFile(&JsonDoc, OutNewTilesetPath, TilesetSpecStr.Size))
+	if (!WriteJsonToFile(&JsonDoc, OutNewTilesetPath, StringLength))
 	{
 		Result.Error = true;
 		return Result;

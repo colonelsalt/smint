@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+typedef uint8_t b8;
 typedef int8_t s8;
 typedef uint8_t u8;
 typedef float f32;

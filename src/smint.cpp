@@ -27,11 +27,13 @@ enum tiled_flip_flags : u32
 
 int main(int ArgC, char** ArgV)
 {
-	if (ArgC != 2)
+	if (ArgC != 2 && ArgC != 3)
 	{
-		printf("Usage: smint tiled_map.tmj\n");
+		printf("Usage: smint tiled_map.tmj [-rut]\n");
 		return 1;
 	}
+
+	b32 ShouldRemoveUnusedTiles = ArgC == 3 && (strcmp(ArgV[2], "-rut") == 0 || strcmp(ArgV[2], "--remove-unused-tiles"));
 
 	char MapFilePath[MAX_PATH];
 	char* MapRelPath = ArgV[1];
@@ -39,7 +41,7 @@ int main(int ArgC, char** ArgV)
 	
 	char MapFileExtension[16];
 	GetFileExtension(MapFilePath, MapFileExtension);
-	if (strcmp(MapFileExtension, ".tmj") != 0 && strcmp(MapFileExtension, ".json"))
+	if (strcmp(MapFileExtension, ".tmj") != 0 && strcmp(MapFileExtension, ".json") != 0)
 	{
 		fprintf(stderr, "ERROR: Unsupported map file format '%s'; please supply a .tmj/.json file.\n", MapFileExtension);
 		return 1;
@@ -106,8 +108,48 @@ int main(int ArgC, char** ArgV)
 		u32 FirstTileId = TilesetObj["firstgid"].GetUint();
 		const char* TilesetPath = TilesetObj["source"].GetString();
 
+		u64 TilesetStringSize = 0;
+		rapidjson::Document TilesetJson;
+		if (!ParseTilesetJson(TilesetPath, TilesetStringSize, TilesetJson))
+		{
+			return 1;
+		}
+		u32 NumTiles = TilesetJson["tilecount"].GetUint();
+
+		b8* TilesInUse = nullptr;
+		if (ShouldRemoveUnusedTiles)
+		{
+			// Build a list of all tiles that are in use *somewhere* in the map - if we later process a tile that's unused, we can safely drop it
+			TilesInUse = (b8*)calloc(NumTiles, sizeof(b8));
+			for (u32 LayerIndex = 0; LayerIndex < Layers.Size(); LayerIndex++)
+			{
+				rapidjson::Value& Layer = Layers[LayerIndex];
+				if (!Layer.IsObject() || !Layer.HasMember("data") || !Layer["data"].IsArray())
+				{
+					fprintf(stderr, "ERROR: Invalid map format - layer %u has unexpected format and/or is missing 'data' array.\n", LayerIndex);
+					return 1;
+				}
+
+				rapidjson::Value& LayerData = Layer["data"];
+				for (u32 DataIndex = 0; DataIndex < LayerData.Size(); DataIndex++)
+				{
+					u32 TileIndex = LayerData[DataIndex].GetUint();
+					if (TileIndex == 0)
+					{
+						continue; // Blank tile
+					}
+					TileIndex -= FirstTileId;
+					TileIndex &= ~(TiledFlag_HFlip | TiledFlag_VFlip | TiledFlag_DiagonalFlip | TiledFlag_Rotated);
+					if (TileIndex <= NumTiles)
+					{
+						TilesInUse[TileIndex] = true;
+					}
+				}
+			}
+		}
+
 		char NewTilesetPath[MAX_PATH];
-		minimised_tileset MinTiles = MinimiseTileset(TilesetPath, NewTilesetPath, MapWorkingDir);
+		minimised_tileset MinTiles = MinimiseTileset(TilesetPath, TilesetJson, TilesetStringSize, NewTilesetPath, MapWorkingDir, TilesInUse);
 		if (MinTiles.Error)
 		{
 			return 1;
@@ -162,14 +204,21 @@ int main(int ArgC, char** ArgV)
 					TileIndex &= ~TiledFlag_Rotated;
 				}
 				TileIndex -= FirstTileId;
-				if (TileIndex >= MinTiles.OriginalImage.TileWidth * MinTiles.OriginalImage.TileHeight)
+				if (TileIndex >= NumTiles)
 				{
 					// This tile belongs to another tileset; we'll get it later
 					continue;
 				}
 
+				if (ShouldRemoveUnusedTiles)
+				{
+					Assert(TilesInUse[TileIndex]);
+				}
+
 				tile* SourceTile = MinTiles.OriginalImage.Tiles + TileIndex;
 				unique_tile* UniqueTile = SourceTile->EquivalentUniqueTile;
+				Assert(UniqueTile);
+
 				u32 NewTileIndex = UniqueTile - MinTiles.MinimisedTiles;
 				Assert(NewTileIndex < MinTiles.NumUniqueTiles);
 

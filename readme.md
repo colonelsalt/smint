@@ -20,6 +20,8 @@ Wrote minimised tile image to 'castle_min.png'.
 Map 'CastleMap.tmj' successfully minimised to 'CastleMap_min.tmj'.
 ```
 
+Note: You can also add the argument `--remove-unused-tiles` (or `-rut`) to further reduce the number of tiles, by removing any tiles in the linked tilesets that aren't used anywhere in the input map.
+
 ![demo_image](https://i.imgur.com/UcV3uVw.png)
 *Tileset pictured is by Jason Perry from [timefantasy.net](usage_demo.png)*.
 
